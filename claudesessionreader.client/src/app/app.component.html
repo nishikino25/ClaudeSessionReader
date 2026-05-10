@@ -1,0 +1,174 @@
+<div class="app-layout">
+
+  <!-- LEFT PANEL: Projects -->
+  <aside class="panel panel-projects">
+    <div class="panel-header">
+      <h2>Projects</h2>
+    </div>
+
+    <div class="path-input-area">
+      <input
+        class="path-input"
+        [(ngModel)]="manualPath"
+        placeholder="貼上 .claude/projects 路徑..."
+        (keyup.enter)="scanManualPath()"
+        (focus)="showPathHint = true"
+        (blur)="showPathHint = false"
+      />
+      <button class="btn-scan" (click)="scanManualPath()" [disabled]="!manualPath.trim()">
+        Scan
+      </button>
+    </div>
+    <div class="path-hint" *ngIf="showPathHint">
+      輸入包含 Claude sessions 的資料夾路徑，例如：<br>
+      <code>C:\Users\你的帳號\.claude\projects</code>
+    </div>
+
+    <div class="discover-bar">
+      <button class="btn-discover" (click)="discoverDefault()" [disabled]="loadingProjects">
+        {{ loadingProjects ? 'Scanning...' : '⟳ Load Default Path' }}
+      </button>
+    </div>
+
+    <div *ngIf="loadingProjects" class="loading-text">Discovering projects...</div>
+
+    <div class="project-list">
+      <div
+        *ngFor="let project of projects"
+        class="project-item"
+        [class.active]="selectedProject?.fullPath === project.fullPath"
+        (click)="selectProject(project)"
+        [title]="project.decodedPath"
+      >
+        <div class="project-name">{{ project.displayName }}</div>
+        <div class="project-meta">
+          <span class="project-path">{{ project.decodedPath }}</span>
+          <span class="session-badge">{{ project.sessionCount }} session{{ project.sessionCount !== 1 ? 's' : '' }}</span>
+        </div>
+      </div>
+
+      <div *ngIf="!loadingProjects && projects.length === 0" class="empty-state">
+        No projects found. Paste a path above to scan manually.
+      </div>
+    </div>
+  </aside>
+
+  <!-- MIDDLE PANEL: Sessions -->
+  <aside class="panel panel-sessions">
+    <div class="panel-header">
+      <h2>Sessions</h2>
+      <span *ngIf="selectedProject" class="panel-subtitle">{{ selectedProject.displayName }}</span>
+    </div>
+
+    <div *ngIf="!selectedProject" class="empty-state">Select a project</div>
+    <div *ngIf="loadingSessions" class="loading-text">Loading sessions...</div>
+
+    <div class="session-list">
+      <div
+        *ngFor="let session of sessions"
+        class="session-item"
+        [class.active]="selectedSession?.id === session.id"
+        (click)="selectSession(session)"
+      >
+        <div class="session-title">{{ session.title || 'Untitled Session' }}</div>
+        <div class="session-meta">
+          <span class="session-date">{{ formatShortDate(session.startTime) }}</span>
+          <span class="session-count">{{ session.messageCount }} msg{{ session.messageCount !== 1 ? 's' : '' }}</span>
+        </div>
+      </div>
+
+      <div *ngIf="!loadingSessions && selectedProject && sessions.length === 0" class="empty-state">
+        No sessions found
+      </div>
+    </div>
+  </aside>
+
+  <!-- RIGHT PANEL: Conversation -->
+  <main class="panel panel-conversation">
+    <div class="panel-header">
+      <h2>{{ selectedSession?.title || (selectedSession ? 'Conversation' : 'Select a session') }}</h2>
+      <span *ngIf="selectedSession" class="panel-subtitle">{{ formatDate(selectedSession.startTime) }}</span>
+
+      <div class="settings-toolbar">
+        <!-- Theme toggle -->
+        <button class="theme-toggle" (click)="setTheme(theme === 'dark' ? 'light' : 'dark')" [title]="theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'">
+          <span class="theme-track" [class.light]="theme === 'light'">
+            <span class="theme-thumb">{{ theme === 'dark' ? '🌙' : '☀️' }}</span>
+          </span>
+        </button>
+        <!-- Font size btn-group -->
+        <div class="btn-group">
+          <button [class.active]="fontSize === 'sm'" (click)="setFontSize('sm')" title="Small">S</button>
+          <button [class.active]="fontSize === 'md'" (click)="setFontSize('md')" title="Medium">M</button>
+          <button [class.active]="fontSize === 'lg'" (click)="setFontSize('lg')" title="Large">L</button>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="!selectedSession" class="empty-state-center">
+      <div class="welcome-icon">💬</div>
+      <p>Select a project and session to view the conversation</p>
+    </div>
+
+    <div *ngIf="loadingMessages" class="loading-text loading-center">Loading conversation...</div>
+
+    <div class="messages-container" #messagesContainer *ngIf="selectedSession && !loadingMessages">
+      <div
+        *ngFor="let msg of messages"
+        class="message-wrapper"
+        [class.user-wrapper]="msg.role === 'user'"
+        [class.assistant-wrapper]="msg.role === 'assistant'"
+      >
+        <div class="message-role-label">{{ msg.role === 'user' ? 'You' : 'Claude' }}</div>
+        <div class="message-bubble" [class.user-bubble]="msg.role === 'user'" [class.assistant-bubble]="msg.role === 'assistant'">
+
+          <ng-container *ngFor="let block of msg.content; let i = index">
+
+            <!-- Text block -->
+            <div *ngIf="block.type === 'text'" class="block-text" [innerHTML]="block.text | markdown"></div>
+
+            <!-- Thinking block -->
+            <div *ngIf="block.type === 'thinking'" class="block-thinking">
+              <button class="toggle-btn" (click)="toggleThinking(msg.uuid + '-' + i)">
+                <span class="toggle-icon">{{ isThinkingExpanded(msg.uuid + '-' + i) ? '▼' : '▶' }}</span>
+                Thinking
+              </button>
+              <div *ngIf="isThinkingExpanded(msg.uuid + '-' + i)" class="thinking-content">{{ block.thinking }}</div>
+            </div>
+
+            <!-- Tool use block -->
+            <div *ngIf="block.type === 'tool_use'" class="block-tool-use">
+              <button class="toggle-btn tool-btn" (click)="toggleToolUse(msg.uuid + '-' + i)">
+                <span class="toggle-icon">{{ isToolUseExpanded(msg.uuid + '-' + i) ? '▼' : '▶' }}</span>
+                <span class="tool-icon">⚙</span> {{ block.toolName }}
+              </button>
+              <div *ngIf="isToolUseExpanded(msg.uuid + '-' + i)" class="tool-input">
+                <pre>{{ block.input | json }}</pre>
+              </div>
+            </div>
+
+            <!-- Tool result block -->
+            <div *ngIf="block.type === 'tool_result'" class="block-tool-result">
+              <details>
+                <summary>Tool Result</summary>
+                <pre class="tool-result-content">{{ block.text }}</pre>
+              </details>
+            </div>
+
+          </ng-container>
+
+        </div>
+        <div class="message-timestamp">{{ formatDate(msg.timestamp) }}</div>
+      </div>
+
+      <div *ngIf="messages.length === 0" class="empty-state-center">
+        <p>No messages in this session</p>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<div *ngIf="error" class="error-toast" (click)="error = ''">
+  ⚠ {{ error }} <span class="dismiss">✕</span>
+</div>

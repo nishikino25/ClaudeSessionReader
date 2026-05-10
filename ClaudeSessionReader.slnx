@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="claudesessionreader.client/claudesessionreader.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="ClaudeSessionReader.Server/ClaudeSessionReader.Server.csproj" />
+</Solution>

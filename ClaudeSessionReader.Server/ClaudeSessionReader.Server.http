@@ -1,0 +1,6 @@
+@ClaudeSessionReader.Server_HostAddress = http://localhost:5129
+
+GET {{ClaudeSessionReader.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

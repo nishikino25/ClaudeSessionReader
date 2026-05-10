@@ -1,0 +1,96 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Dark theme (default) ── */
+body {
+  --bg-app:            #0d1117;
+  --bg-panel:          #161b22;
+  --bg-item:           #1c2128;
+  --bg-item-hover:     #161b22;
+  --bg-input:          #0d1117;
+  --bg-code:           #0d1117;
+  --bg-tool:           #1c1600;
+  --bg-thinking:       #0d1117;
+
+  --border:            #21262d;
+  --border-subtle:     #30363d;
+  --border-accent:     #58a6ff;
+
+  --text-primary:      #e6edf3;
+  --text-secondary:    #8b949e;
+  --text-muted:        #484f58;
+  --text-accent:       #58a6ff;
+  --text-tool:         #d29922;
+  --text-code:         #e6edf3;
+
+  --bubble-user-bg:    #1f4068;
+  --bubble-user-bd:    #1a3a5c;
+  --bubble-ai-bg:      #161b22;
+  --bubble-ai-bd:      #21262d;
+
+  --btn-scan-bg:       #238636;
+  --btn-scan-hover:    #2ea043;
+  --btn-disc-bg:       #1c2128;
+  --btn-disc-color:    #8b949e;
+
+  --scrollbar:         #30363d;
+  --scrollbar-hover:   #484f58;
+
+  --font-size:         14px;
+  --font-size-sm:      12px;
+  --font-size-xs:      11px;
+  --font-size-code:    12px;
+}
+
+/* ── Light theme ── */
+body.theme-light {
+  --bg-app:            #ffffff;
+  --bg-panel:          #f6f8fa;
+  --bg-item:           #eaeef2;
+  --bg-item-hover:     #f6f8fa;
+  --bg-input:          #ffffff;
+  --bg-code:           #f6f8fa;
+  --bg-tool:           #fffbeb;
+  --bg-thinking:       #f6f8fa;
+
+  --border:            #d1d9e0;
+  --border-subtle:     #c8d1d9;
+  --border-accent:     #0969da;
+
+  --text-primary:      #1f2328;
+  --text-secondary:    #57606a;
+  --text-muted:        #9198a1;
+  --text-accent:       #0969da;
+  --text-tool:         #9a6700;
+  --text-code:         #1f2328;
+
+  --bubble-user-bg:    #ddf4ff;
+  --bubble-user-bd:    #54aeff;
+  --bubble-ai-bg:      #f6f8fa;
+  --bubble-ai-bd:      #d1d9e0;
+
+  --btn-scan-bg:       #1a7f37;
+  --btn-scan-hover:    #2da44e;
+  --btn-disc-bg:       #eaeef2;
+  --btn-disc-color:    #57606a;
+
+  --scrollbar:         #c8d1d9;
+  --scrollbar-hover:   #9198a1;
+}
+
+/* ── Font size presets ── */
+body.size-sm { --font-size: 12px; --font-size-sm: 11px; --font-size-xs: 10px; --font-size-code: 11px; }
+body.size-md { --font-size: 14px; --font-size-sm: 12px; --font-size-xs: 11px; --font-size-code: 12px; }
+body.size-lg { --font-size: 16px; --font-size-sm: 14px; --font-size-xs: 12px; --font-size-code: 13px; }
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
