@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
-import { ClaudeProject, ClaudeSession, SessionMessage } from './models/claude.models';
+import { ClaudeProject, ClaudeSession, SessionMessage, SubAgentInfo } from './models/claude.models';
 import { SessionService } from './services/session.service';
 
 @Component({
@@ -16,6 +16,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
 
   selectedProject: ClaudeProject | null = null;
   selectedSession: ClaudeSession | null = null;
+  selectedSubAgent: SubAgentInfo | null = null;
 
   manualPath = '';
   showPathHint = false;
@@ -120,6 +121,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
 
   selectSession(session: ClaudeSession) {
     this.selectedSession = session;
+    this.selectedSubAgent = null;
     this.messages = [];
     this.loadingMessages = true;
     this.error = '';
@@ -134,6 +136,30 @@ export class AppComponent implements OnInit, AfterViewChecked {
       error: () => {
         this.loadingMessages = false;
         this.error = 'Failed to load messages.';
+      }
+    });
+  }
+
+  selectSubAgent(subAgent: SubAgentInfo) {
+    this.selectedSubAgent = subAgent;
+    this.messages = [];
+    this.loadingMessages = true;
+    this.error = '';
+    this.expandedThinking.clear();
+    this.expandedToolUse.clear();
+    this.sessionService.getSubAgentMessages(
+      this.selectedProject!.fullPath,
+      this.selectedSession!.id,
+      subAgent.agentId
+    ).subscribe({
+      next: messages => {
+        this.messages = messages;
+        this.loadingMessages = false;
+        this.shouldScrollToBottom = true;
+      },
+      error: () => {
+        this.loadingMessages = false;
+        this.error = 'Failed to load subagent messages.';
       }
     });
   }

@@ -8,11 +8,18 @@ public record ClaudeProject(
     int SessionCount,
     DateTime LastModified);
 
+public record SubAgentInfo(
+    string AgentId,
+    string AgentType,
+    string Description,
+    int MessageCount);
+
 public record ClaudeSession(
     string Id,
     string? Title,
     DateTime? StartTime,
-    int MessageCount);
+    int MessageCount,
+    List<SubAgentInfo> SubAgents);
 
 public record ContentBlock(
     string Type,

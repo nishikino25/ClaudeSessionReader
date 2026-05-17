@@ -64,18 +64,36 @@
     <div *ngIf="loadingSessions" class="loading-text">Loading sessions...</div>
 
     <div class="session-list">
-      <div
-        *ngFor="let session of sessions"
-        class="session-item"
-        [class.active]="selectedSession?.id === session.id"
-        (click)="selectSession(session)"
-      >
-        <div class="session-title">{{ session.title || 'Untitled Session' }}</div>
-        <div class="session-meta">
-          <span class="session-date">{{ formatShortDate(session.startTime) }}</span>
-          <span class="session-count">{{ session.messageCount }} msg{{ session.messageCount !== 1 ? 's' : '' }}</span>
+      <ng-container *ngFor="let session of sessions">
+        <div
+          class="session-item"
+          [class.active]="selectedSession?.id === session.id && !selectedSubAgent"
+          (click)="selectSession(session)"
+        >
+          <div class="session-title">{{ session.title || 'Untitled Session' }}</div>
+          <div class="session-meta">
+            <span class="session-date">{{ formatShortDate(session.startTime) }}</span>
+            <span class="session-count">{{ session.messageCount }} msg{{ session.messageCount !== 1 ? 's' : '' }}</span>
+            <span *ngIf="session.subAgents?.length" class="subagent-badge">{{ session.subAgents.length }} agent{{ session.subAgents.length !== 1 ? 's' : '' }}</span>
+          </div>
         </div>
-      </div>
+
+        <div *ngIf="selectedSession?.id === session.id && session.subAgents?.length" class="subagent-list">
+          <div
+            *ngFor="let agent of session.subAgents"
+            class="subagent-item"
+            [class.active]="selectedSubAgent?.agentId === agent.agentId"
+            (click)="selectSubAgent(agent)"
+          >
+            <span class="subagent-icon">⚡</span>
+            <div class="subagent-info">
+              <div class="subagent-type">{{ agent.agentType }}</div>
+              <div class="subagent-desc">{{ agent.description }}</div>
+            </div>
+            <span class="session-count">{{ agent.messageCount }}m</span>
+          </div>
+        </div>
+      </ng-container>
 
       <div *ngIf="!loadingSessions && selectedProject && sessions.length === 0" class="empty-state">
         No sessions found
@@ -86,8 +104,14 @@
   <!-- RIGHT PANEL: Conversation -->
   <main class="panel panel-conversation">
     <div class="panel-header">
-      <h2>{{ selectedSession?.title || (selectedSession ? 'Conversation' : 'Select a session') }}</h2>
-      <span *ngIf="selectedSession" class="panel-subtitle">{{ formatDate(selectedSession.startTime) }}</span>
+      <h2>
+        <ng-container *ngIf="selectedSubAgent; else sessionTitle">
+          <span class="subagent-header-tag">⚡ Subagent</span> {{ selectedSubAgent.agentType }}
+        </ng-container>
+        <ng-template #sessionTitle>{{ selectedSession?.title || (selectedSession ? 'Conversation' : 'Select a session') }}</ng-template>
+      </h2>
+      <span *ngIf="selectedSubAgent" class="panel-subtitle">{{ selectedSubAgent.description }}</span>
+      <span *ngIf="!selectedSubAgent && selectedSession" class="panel-subtitle">{{ formatDate(selectedSession.startTime) }}</span>
 
       <div class="settings-toolbar">
         <!-- Theme toggle -->

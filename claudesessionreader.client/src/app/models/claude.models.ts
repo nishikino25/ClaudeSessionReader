@@ -7,11 +7,19 @@ export interface ClaudeProject {
   lastModified: string;
 }
 
+export interface SubAgentInfo {
+  agentId: string;
+  agentType: string;
+  description: string;
+  messageCount: number;
+}
+
 export interface ClaudeSession {
   id: string;
   title: string | null;
   startTime: string | null;
   messageCount: number;
+  subAgents: SubAgentInfo[];
 }
 
 export interface ContentBlock {

@@ -34,13 +34,12 @@ public class SessionsController : ControllerBase
             return NotFound();
 
         var sessions = new List<ClaudeSession>();
-        foreach (var file in Directory.GetFiles(path, "*.jsonl")
-                     .OrderByDescending(System.IO.File.GetLastWriteTime))
+        foreach (var file in Directory.GetFiles(path, "*.jsonl"))
         {
-            var session = ParseSessionMetadata(file);
+            var session = ParseSessionMetadata(file, path);
             if (session != null) sessions.Add(session);
         }
-        return sessions;
+        return sessions.OrderByDescending(s => s.StartTime ?? DateTime.MinValue).ToList();
     }
 
     [HttpGet("projects/{encodedPath}/sessions/{sessionId}")]
@@ -48,6 +47,17 @@ public class SessionsController : ControllerBase
     {
         var path = Uri.UnescapeDataString(encodedPath);
         var file = Path.Combine(path, $"{sessionId}.jsonl");
+        if (!System.IO.File.Exists(file))
+            return NotFound();
+
+        return ParseSessionMessages(file);
+    }
+
+    [HttpGet("projects/{encodedPath}/sessions/{sessionId}/subagents/{agentId}")]
+    public ActionResult<List<SessionMessage>> GetSubAgentMessages(string encodedPath, string sessionId, string agentId)
+    {
+        var path = Uri.UnescapeDataString(encodedPath);
+        var file = Path.Combine(path, sessionId, "subagents", $"agent-{agentId}.jsonl");
         if (!System.IO.File.Exists(file))
             return NotFound();
 
@@ -98,10 +108,11 @@ public class SessionsController : ControllerBase
         return (displayName, decoded);
     }
 
-    private static ClaudeSession? ParseSessionMetadata(string filePath)
+    private static ClaudeSession? ParseSessionMetadata(string filePath, string projectPath)
     {
         var sessionId = Path.GetFileNameWithoutExtension(filePath);
         string? title = null;
+        string? firstUserText = null;
         DateTime? startTime = null;
         int messageCount = 0;
 
@@ -128,6 +139,8 @@ public class SessionsController : ControllerBase
                             if (DateTime.TryParse(ts.GetString(), out var dt))
                                 startTime = dt;
                         }
+                        if (firstUserText == null && root.TryGetProperty("message", out var msg))
+                            firstUserText = ExtractFirstText(msg);
                         break;
                     case "assistant":
                         messageCount++;
@@ -137,7 +150,93 @@ public class SessionsController : ControllerBase
         }
         catch { /* skip malformed files */ }
 
-        return new ClaudeSession(sessionId, title, startTime, messageCount);
+        if (title == null && firstUserText != null)
+        {
+            title = firstUserText.Length > 60
+                ? firstUserText[..60].TrimEnd() + "…"
+                : firstUserText;
+        }
+
+        var subAgents = ScanSubAgents(projectPath, sessionId);
+        return new ClaudeSession(sessionId, title, startTime, messageCount, subAgents);
+    }
+
+    private static List<SubAgentInfo> ScanSubAgents(string projectPath, string sessionId)
+    {
+        var subAgents = new List<SubAgentInfo>();
+        var subagentsDir = Path.Combine(projectPath, sessionId, "subagents");
+        if (!Directory.Exists(subagentsDir)) return subAgents;
+
+        foreach (var metaFile in Directory.GetFiles(subagentsDir, "*.meta.json"))
+        {
+            try
+            {
+                var json = System.IO.File.ReadAllText(metaFile, System.Text.Encoding.UTF8);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var agentType = root.TryGetProperty("agentType", out var at) ? at.GetString() ?? "unknown" : "unknown";
+                var description = root.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+
+                // strip double extension: agent-<id>.meta.json → agent-<id>
+                var fileName = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(metaFile));
+                var agentId = fileName.StartsWith("agent-") ? fileName["agent-".Length..] : fileName;
+
+                var jsonlFile = Path.Combine(subagentsDir, $"agent-{agentId}.jsonl");
+                var msgCount = CountMessages(jsonlFile);
+
+                subAgents.Add(new SubAgentInfo(agentId, agentType, description, msgCount));
+            }
+            catch { /* skip malformed meta */ }
+        }
+
+        return subAgents;
+    }
+
+    private static int CountMessages(string filePath)
+    {
+        if (!System.IO.File.Exists(filePath)) return 0;
+        int count = 0;
+        try
+        {
+            foreach (var line in System.IO.File.ReadLines(filePath, System.Text.Encoding.UTF8))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                using var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("type", out var t)) continue;
+                var type = t.GetString();
+                if (type == "user" || type == "assistant") count++;
+            }
+        }
+        catch { }
+        return count;
+    }
+
+    private static string? ExtractFirstText(JsonElement message)
+    {
+        if (!message.TryGetProperty("content", out var content)) return null;
+
+        if (content.ValueKind == JsonValueKind.String)
+        {
+            var text = content.GetString()?.Trim();
+            return string.IsNullOrEmpty(text) ? null : text;
+        }
+
+        if (content.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in content.EnumerateArray())
+            {
+                if (item.TryGetProperty("type", out var bt) && bt.GetString() == "text"
+                    && item.TryGetProperty("text", out var t))
+                {
+                    var text = t.GetString()?.Trim();
+                    if (!string.IsNullOrEmpty(text)) return text;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static List<SessionMessage> ParseSessionMessages(string filePath)

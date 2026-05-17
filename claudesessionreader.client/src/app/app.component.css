@@ -251,7 +251,7 @@
   color: var(--text-secondary);
   flex: 1;
 }
-.session-badge, .session-count {
+.session-badge, .session-count, .subagent-badge {
   font-size: 10px;
   color: var(--text-secondary);
   background: var(--bg-item);
@@ -260,6 +260,57 @@
   padding: 1px 7px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* ── Subagent list ── */
+.subagent-list {
+  border-left: 2px solid var(--border-accent);
+  margin: 0 0 4px 14px;
+}
+.subagent-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+.subagent-item:hover { background: var(--bg-item-hover); }
+.subagent-item.active {
+  background: var(--bg-item);
+  border-left-color: var(--border-accent);
+}
+.subagent-icon { font-size: 12px; margin-top: 1px; flex-shrink: 0; }
+.subagent-info { flex: 1; min-width: 0; }
+.subagent-type {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subagent-desc {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+.subagent-badge {
+  color: var(--border-accent) !important;
+  border-color: var(--border-accent) !important;
+}
+.subagent-header-tag {
+  font-size: 11px;
+  background: var(--border-accent);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 4px;
+  font-weight: 600;
 }
 
 /* ── Conversation ── */
