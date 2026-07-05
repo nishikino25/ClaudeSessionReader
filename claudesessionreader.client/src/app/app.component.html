@@ -7,14 +7,12 @@
     </div>
 
     <div class="path-input-area">
-      <input
-        class="path-input"
-        [(ngModel)]="manualPath"
-        placeholder="貼上 .claude/projects 路徑..."
-        (keyup.enter)="scanManualPath()"
-        (focus)="showPathHint = true"
-        (blur)="showPathHint = false"
-      />
+      <input class="path-input"
+             [(ngModel)]="manualPath"
+             placeholder="貼上 .claude/projects 路徑..."
+             (keyup.enter)="scanManualPath()"
+             (focus)="showPathHint = true"
+             (blur)="showPathHint = false" />
       <button class="btn-scan" (click)="scanManualPath()" [disabled]="!manualPath.trim()">
         Scan
       </button>
@@ -33,13 +31,11 @@
     <div *ngIf="loadingProjects" class="loading-text">Discovering projects...</div>
 
     <div class="project-list">
-      <div
-        *ngFor="let project of projects"
-        class="project-item"
-        [class.active]="selectedProject?.fullPath === project.fullPath"
-        (click)="selectProject(project)"
-        [title]="project.decodedPath"
-      >
+      <div *ngFor="let project of projects"
+           class="project-item"
+           [class.active]="selectedProject?.fullPath === project.fullPath"
+           (click)="selectProject(project)"
+           [title]="project.decodedPath">
         <div class="project-name">{{ project.displayName }}</div>
         <div class="project-meta">
           <span class="project-path">{{ project.decodedPath }}</span>
@@ -49,6 +45,17 @@
 
       <div *ngIf="!loadingProjects && projects.length === 0" class="empty-state">
         No projects found. Paste a path above to scan manually.
+      </div>
+    </div>
+
+    <!-- Backup section -->
+    <div class="backup-section">
+      <div class="backup-label">備份 ~/.claude/projects</div>
+      <button class="btn-backup" (click)="runBackup()" [disabled]="backupInProgress">
+        {{ backupInProgress ? '備份中...' : '選擇資料夾並備份' }}
+      </button>
+      <div *ngIf="backupMessage" class="backup-msg" [class.backup-ok]="backupSuccess" [class.backup-err]="!backupSuccess">
+        {{ backupMessage }}
       </div>
     </div>
   </aside>

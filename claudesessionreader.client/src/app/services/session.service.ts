@@ -31,4 +31,15 @@ export class SessionService {
       `/api/sessions/projects/${encodeURIComponent(projectPath)}/sessions/${sessionId}/subagents/${agentId}`
     );
   }
+
+  listBackupFiles() {
+    return this.http.get<{ relativePath: string; size: number }[]>('/api/sessions/backup/files');
+  }
+
+  getBackupFile(relativePath: string) {
+    return this.http.get(`/api/sessions/backup/file`, {
+      params: { path: relativePath },
+      responseType: 'blob',
+    });
+  }
 }

@@ -1,4 +1,5 @@
 import { Component, OnInit, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { ClaudeProject, ClaudeSession, SessionMessage, SubAgentInfo } from './models/claude.models';
 import { SessionService } from './services/session.service';
 
@@ -24,6 +25,10 @@ export class AppComponent implements OnInit, AfterViewChecked {
   loadingSessions = false;
   loadingMessages = false;
   error = '';
+
+  backupInProgress = false;
+  backupMessage = '';
+  backupSuccess = false;
 
   expandedThinking = new Set<string>();
   expandedToolUse = new Set<string>();
@@ -186,6 +191,55 @@ export class AppComponent implements OnInit, AfterViewChecked {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async runBackup() {
+    if (!('showDirectoryPicker' in window)) {
+      this.backupSuccess = false;
+      this.backupMessage = '此瀏覽器不支援資料夾選擇功能，請改用 Chrome 或 Edge。';
+      return;
+    }
+
+    let dirHandle: FileSystemDirectoryHandle;
+    try {
+      dirHandle = await (window as any).showDirectoryPicker();
+    } catch {
+      return; // user cancelled the picker
+    }
+
+    this.backupInProgress = true;
+    this.backupSuccess = false;
+    this.backupMessage = '';
+
+    try {
+      const files = await firstValueFrom(this.sessionService.listBackupFiles());
+      let copied = 0;
+      for (const file of files) {
+        const blob = await firstValueFrom(this.sessionService.getBackupFile(file.relativePath));
+        const fileHandle = await this.getFileHandleForPath(dirHandle, file.relativePath);
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        copied++;
+        this.backupMessage = `備份中... (${copied}/${files.length})`;
+      }
+      this.backupSuccess = true;
+      this.backupMessage = `備份完成！共複製 ${copied} 個檔案。`;
+    } catch (err: any) {
+      this.backupSuccess = false;
+      this.backupMessage = err?.error?.error ?? err?.message ?? '備份失敗。';
+    } finally {
+      this.backupInProgress = false;
+    }
+  }
+
+  private async getFileHandleForPath(root: FileSystemDirectoryHandle, relativePath: string): Promise<FileSystemFileHandle> {
+    const parts = relativePath.split('/').filter(Boolean);
+    let dir = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      dir = await dir.getDirectoryHandle(parts[i], { create: true });
+    }
+    return dir.getFileHandle(parts[parts.length - 1], { create: true });
   }
 
   private scrollToBottom() {

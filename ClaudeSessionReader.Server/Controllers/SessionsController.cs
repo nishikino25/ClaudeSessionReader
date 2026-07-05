@@ -26,6 +26,37 @@ public class SessionsController : ControllerBase
         return ScanForProjects(request.Path);
     }
 
+    [HttpGet("backup/files")]
+    public ActionResult<List<BackupFileEntry>> ListBackupFiles()
+    {
+        if (!Directory.Exists(DefaultClaudePath))
+            return new List<BackupFileEntry>();
+
+        var entries = Directory.GetFiles(DefaultClaudePath, "*", SearchOption.AllDirectories)
+            .Select(f => new BackupFileEntry(
+                Path.GetRelativePath(DefaultClaudePath, f).Replace('\\', '/'),
+                new FileInfo(f).Length))
+            .ToList();
+        return entries;
+    }
+
+    [HttpGet("backup/file")]
+    public IActionResult GetBackupFile([FromQuery] string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return BadRequest(new { error = "Path is required." });
+
+        var basePath = Path.GetFullPath(DefaultClaudePath);
+        var fullPath = Path.GetFullPath(Path.Combine(basePath, path));
+        if (!fullPath.StartsWith(basePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "Invalid path." });
+
+        if (!System.IO.File.Exists(fullPath))
+            return NotFound();
+
+        return PhysicalFile(fullPath, "application/octet-stream");
+    }
+
     [HttpGet("projects/{encodedPath}/sessions")]
     public ActionResult<List<ClaudeSession>> GetSessions(string encodedPath)
     {

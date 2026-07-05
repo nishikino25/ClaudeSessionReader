@@ -37,3 +37,5 @@ public record SessionMessage(
     DateTime Timestamp);
 
 public record ScanRequest(string Path);
+
+public record BackupFileEntry(string RelativePath, long Size);
