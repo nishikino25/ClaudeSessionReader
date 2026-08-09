@@ -211,20 +211,30 @@ export class AppComponent implements OnInit, AfterViewChecked {
     this.backupSuccess = false;
     this.backupMessage = '';
 
+    const failed: { path: string; reason: string }[] = [];
     try {
       const files = await firstValueFrom(this.sessionService.listBackupFiles());
       let copied = 0;
       for (const file of files) {
-        const blob = await firstValueFrom(this.sessionService.getBackupFile(file.relativePath));
-        const fileHandle = await this.getFileHandleForPath(dirHandle, file.relativePath);
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        copied++;
-        this.backupMessage = `備份中... (${copied}/${files.length})`;
+        try {
+          const blob = await firstValueFrom(this.sessionService.getBackupFile(file.relativePath));
+          const fileHandle = await this.getFileHandleForPath(dirHandle, file.relativePath);
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          copied++;
+        } catch (fileErr: any) {
+          failed.push({ path: file.relativePath, reason: fileErr?.message ?? String(fileErr) });
+        }
+        this.backupMessage = `備份中... (${copied + failed.length}/${files.length})`;
       }
-      this.backupSuccess = true;
-      this.backupMessage = `備份完成！共複製 ${copied} 個檔案。`;
+      this.backupSuccess = failed.length === 0;
+      if (failed.length === 0) {
+        this.backupMessage = `備份完成！共複製 ${copied} 個檔案。`;
+      } else {
+        const sample = failed.slice(0, 5).map(f => f.path).join(', ');
+        this.backupMessage = `備份完成，複製 ${copied} 個檔案，${failed.length} 個失敗：${sample}${failed.length > 5 ? ' …' : ''}`;
+      }
     } catch (err: any) {
       this.backupSuccess = false;
       this.backupMessage = err?.error?.error ?? err?.message ?? '備份失敗。';

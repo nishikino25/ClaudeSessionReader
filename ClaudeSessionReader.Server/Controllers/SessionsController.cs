@@ -33,11 +33,21 @@ public class SessionsController : ControllerBase
             return new List<BackupFileEntry>();
 
         var entries = Directory.GetFiles(DefaultClaudePath, "*", SearchOption.AllDirectories)
+            .Where(f => !IsOsMetadataFile(f))
             .Select(f => new BackupFileEntry(
                 Path.GetRelativePath(DefaultClaudePath, f).Replace('\\', '/'),
                 new FileInfo(f).Length))
             .ToList();
         return entries;
+    }
+
+    private static bool IsOsMetadataFile(string path)
+    {
+        // desktop.ini and thumbs.db are Windows folder-customization files, not Claude data,
+        // and the browser's File System Access API refuses to create files with these names.
+        var name = Path.GetFileName(path);
+        return name.Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("thumbs.db", StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpGet("backup/file")]
