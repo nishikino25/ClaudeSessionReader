@@ -269,6 +269,45 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.session-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.session-title-row .session-title { flex: 1; min-width: 0; }
+.session-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.session-item:hover .session-actions { opacity: 1; }
+.icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.icon-btn:hover { background: var(--border); color: var(--text-primary); }
+.icon-btn-danger:hover { background: #f8514933; color: #f85149; }
+.session-title-input {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-item);
+  border: 1px solid var(--border-accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.session-title-input:focus { outline: none; }
 .project-meta, .session-meta {
   display: flex;
   justify-content: space-between;

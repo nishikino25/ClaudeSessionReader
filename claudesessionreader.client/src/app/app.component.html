@@ -77,7 +77,24 @@
           [class.active]="selectedSession?.id === session.id && !selectedSubAgent"
           (click)="selectSession(session)"
         >
-          <div class="session-title">{{ session.title || 'Untitled Session' }}</div>
+          <div class="session-title-row" *ngIf="editingSessionId !== session.id">
+            <div class="session-title">{{ session.title || 'Untitled Session' }}</div>
+            <div class="session-actions">
+              <button class="icon-btn" title="Rename" (click)="startEditTitle(session, $event)">✎</button>
+              <button class="icon-btn icon-btn-danger" title="Delete" (click)="deleteSession(session, $event)">🗑</button>
+            </div>
+          </div>
+          <div class="session-title-row" *ngIf="editingSessionId === session.id" (click)="$event.stopPropagation()">
+            <input
+              class="session-title-input"
+              type="text"
+              [(ngModel)]="editingTitleValue"
+              (keydown.enter)="saveTitle(session)"
+              (keydown.escape)="cancelEditTitle()"
+              (blur)="saveTitle(session)"
+              autofocus
+            />
+          </div>
           <div class="session-meta">
             <span class="session-date">{{ formatShortDate(session.startTime) }}</span>
             <span class="session-count">{{ session.messageCount }} msg{{ session.messageCount !== 1 ? 's' : '' }}</span>

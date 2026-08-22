@@ -32,6 +32,19 @@ export class SessionService {
     );
   }
 
+  renameSession(projectPath: string, sessionId: string, title: string) {
+    return this.http.put<void>(
+      `/api/sessions/projects/${encodeURIComponent(projectPath)}/sessions/${sessionId}/title`,
+      { title }
+    );
+  }
+
+  deleteSession(projectPath: string, sessionId: string) {
+    return this.http.delete<void>(
+      `/api/sessions/projects/${encodeURIComponent(projectPath)}/sessions/${sessionId}`
+    );
+  }
+
   listBackupFiles() {
     return this.http.get<{ relativePath: string; size: number }[]>('/api/sessions/backup/files');
   }

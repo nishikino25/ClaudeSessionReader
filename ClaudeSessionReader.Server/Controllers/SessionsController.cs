@@ -94,6 +94,60 @@ public class SessionsController : ControllerBase
         return ParseSessionMessages(file);
     }
 
+    [HttpPut("projects/{encodedPath}/sessions/{sessionId}/title")]
+    public IActionResult RenameSession(string encodedPath, string sessionId, [FromBody] RenameSessionRequest request)
+    {
+        var path = Uri.UnescapeDataString(encodedPath);
+        if (!IsValidSessionId(sessionId))
+            return BadRequest(new { error = "Invalid session id." });
+
+        var title = request.Title?.Trim();
+        if (string.IsNullOrEmpty(title))
+            return BadRequest(new { error = "Title is required." });
+
+        var file = Path.Combine(path, $"{sessionId}.jsonl");
+        if (!System.IO.File.Exists(file))
+            return NotFound();
+
+        try
+        {
+            RewriteTitle(file, sessionId, title);
+        }
+        catch (IOException)
+        {
+            return StatusCode(500, new { error = "Failed to update the session file." });
+        }
+
+        return NoContent();
+    }
+
+    [HttpDelete("projects/{encodedPath}/sessions/{sessionId}")]
+    public IActionResult DeleteSession(string encodedPath, string sessionId)
+    {
+        var path = Uri.UnescapeDataString(encodedPath);
+        if (!IsValidSessionId(sessionId))
+            return BadRequest(new { error = "Invalid session id." });
+
+        var file = Path.Combine(path, $"{sessionId}.jsonl");
+        if (!System.IO.File.Exists(file))
+            return NotFound();
+
+        try
+        {
+            System.IO.File.Delete(file);
+
+            var sessionDataDir = Path.Combine(path, sessionId);
+            if (Directory.Exists(sessionDataDir))
+                Directory.Delete(sessionDataDir, recursive: true);
+        }
+        catch (IOException)
+        {
+            return StatusCode(500, new { error = "Failed to delete the session file." });
+        }
+
+        return NoContent();
+    }
+
     [HttpGet("projects/{encodedPath}/sessions/{sessionId}/subagents/{agentId}")]
     public ActionResult<List<SessionMessage>> GetSubAgentMessages(string encodedPath, string sessionId, string agentId)
     {
@@ -147,6 +201,42 @@ public class SessionsController : ControllerBase
         var displayName = segments.Length > 0 ? segments[^1] : folderName;
 
         return (displayName, decoded);
+    }
+
+    private static bool IsValidSessionId(string sessionId) =>
+        !string.IsNullOrEmpty(sessionId)
+        && sessionId.All(c => char.IsLetterOrDigit(c) || c == '-');
+
+    private static void RewriteTitle(string filePath, string sessionId, string newTitle)
+    {
+        var lines = System.IO.File.ReadAllLines(filePath, System.Text.Encoding.UTF8);
+        var updated = new List<string>(lines.Length + 1);
+        var found = false;
+        var newTitleLine = JsonSerializer.Serialize(new { type = "ai-title", aiTitle = newTitle, sessionId });
+
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) { updated.Add(line); continue; }
+
+            using var doc = JsonDocument.Parse(line);
+            if (doc.RootElement.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "ai-title")
+            {
+                found = true;
+                updated.Add(newTitleLine);
+            }
+            else
+            {
+                updated.Add(line);
+            }
+        }
+
+        if (!found)
+            updated.Add(newTitleLine);
+
+        var tempFile = filePath + ".tmp";
+        System.IO.File.WriteAllLines(tempFile, updated, new System.Text.UTF8Encoding(false));
+        System.IO.File.Delete(filePath);
+        System.IO.File.Move(tempFile, filePath);
     }
 
     private static ClaudeSession? ParseSessionMetadata(string filePath, string projectPath)

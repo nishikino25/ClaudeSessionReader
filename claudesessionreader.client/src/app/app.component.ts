@@ -33,6 +33,9 @@ export class AppComponent implements OnInit, AfterViewChecked {
   expandedThinking = new Set<string>();
   expandedToolUse = new Set<string>();
 
+  editingSessionId: string | null = null;
+  editingTitleValue = '';
+
   theme: 'dark' | 'light' = 'dark';
   fontSize: 'sm' | 'md' | 'lg' = 'md';
 
@@ -165,6 +168,61 @@ export class AppComponent implements OnInit, AfterViewChecked {
       error: () => {
         this.loadingMessages = false;
         this.error = 'Failed to load subagent messages.';
+      }
+    });
+  }
+
+  startEditTitle(session: ClaudeSession, event: Event) {
+    event.stopPropagation();
+    this.editingSessionId = session.id;
+    this.editingTitleValue = session.title ?? '';
+  }
+
+  cancelEditTitle() {
+    this.editingSessionId = null;
+    this.editingTitleValue = '';
+  }
+
+  saveTitle(session: ClaudeSession) {
+    if (this.editingSessionId !== session.id) return;
+    const title = this.editingTitleValue.trim();
+
+    if (!title || title === session.title) {
+      this.cancelEditTitle();
+      return;
+    }
+
+    this.sessionService.renameSession(this.selectedProject!.fullPath, session.id, title).subscribe({
+      next: () => {
+        session.title = title;
+        this.cancelEditTitle();
+      },
+      error: () => {
+        this.error = 'Failed to rename session.';
+        this.cancelEditTitle();
+      }
+    });
+  }
+
+  deleteSession(session: ClaudeSession, event: Event) {
+    event.stopPropagation();
+    const confirmed = window.confirm(
+      `永久刪除這個 session？\n\n"${session.title || 'Untitled Session'}"\n\n此操作無法復原。`
+    );
+    if (!confirmed) return;
+
+    this.sessionService.deleteSession(this.selectedProject!.fullPath, session.id).subscribe({
+      next: () => {
+        this.sessions = this.sessions.filter(s => s.id !== session.id);
+        if (this.selectedProject) this.selectedProject.sessionCount--;
+        if (this.selectedSession?.id === session.id) {
+          this.selectedSession = null;
+          this.selectedSubAgent = null;
+          this.messages = [];
+        }
+      },
+      error: () => {
+        this.error = 'Failed to delete session.';
       }
     });
   }

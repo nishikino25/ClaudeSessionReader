@@ -39,3 +39,5 @@ public record SessionMessage(
 public record ScanRequest(string Path);
 
 public record BackupFileEntry(string RelativePath, long Size);
+
+public record RenameSessionRequest(string Title);
