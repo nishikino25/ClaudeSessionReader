@@ -263,6 +263,10 @@ public class SessionsController : ControllerBase
                         if (root.TryGetProperty("aiTitle", out var t))
                             title = t.GetString();
                         break;
+                    case "custom-title":
+                        if (root.TryGetProperty("customTitle", out var ct))
+                            title = ct.GetString();
+                        break;
                     case "user":
                         messageCount++;
                         if (startTime == null && root.TryGetProperty("timestamp", out var ts))
