@@ -380,6 +380,16 @@
   color: var(--border-accent) !important;
   border-color: var(--border-accent) !important;
 }
+.continuation-badge {
+  font-size: 10px;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.original-title { font-style: italic; }
 .subagent-header-tag {
   font-size: 11px;
   background: var(--border-accent);

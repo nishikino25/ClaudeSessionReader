@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { ClaudeProject, ClaudeSession, SessionMessage, SubAgentInfo } from './models/claude.models';
 import { SessionService } from './services/session.service';
 
@@ -135,7 +135,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
     this.error = '';
     this.expandedThinking.clear();
     this.expandedToolUse.clear();
-    this.sessionService.getMessages(this.selectedProject!.fullPath, session.id).subscribe({
+    this.sessionService.getMessages(this.selectedProject!.fullPath, session.id, session.previousSessionIds).subscribe({
       next: messages => {
         this.messages = messages;
         this.loadingMessages = false;
@@ -157,7 +157,7 @@ export class AppComponent implements OnInit, AfterViewChecked {
     this.expandedToolUse.clear();
     this.sessionService.getSubAgentMessages(
       this.selectedProject!.fullPath,
-      this.selectedSession!.id,
+      subAgent.sessionId,
       subAgent.agentId
     ).subscribe({
       next: messages => {
@@ -206,15 +206,17 @@ export class AppComponent implements OnInit, AfterViewChecked {
 
   deleteSession(session: ClaudeSession, event: Event) {
     event.stopPropagation();
+    const segmentIds = [...session.previousSessionIds, session.id];
+    const segmentNote = segmentIds.length > 1 ? `\n\n（包含 ${segmentIds.length} 段接續的 session 檔案）` : '';
     const confirmed = window.confirm(
-      `永久刪除這個 session？\n\n"${session.title || 'Untitled Session'}"\n\n此操作無法復原。`
+      `永久刪除這個 session？\n\n"${session.title || 'Untitled Session'}"${segmentNote}\n\n此操作無法復原。`
     );
     if (!confirmed) return;
 
-    this.sessionService.deleteSession(this.selectedProject!.fullPath, session.id).subscribe({
+    forkJoin(segmentIds.map(id => this.sessionService.deleteSession(this.selectedProject!.fullPath, id))).subscribe({
       next: () => {
         this.sessions = this.sessions.filter(s => s.id !== session.id);
-        if (this.selectedProject) this.selectedProject.sessionCount--;
+        if (this.selectedProject) this.selectedProject.sessionCount -= segmentIds.length;
         if (this.selectedSession?.id === session.id) {
           this.selectedSession = null;
           this.selectedSubAgent = null;
@@ -273,8 +275,16 @@ export class AppComponent implements OnInit, AfterViewChecked {
     try {
       const files = await firstValueFrom(this.sessionService.listBackupFiles());
       let copied = 0;
+      let skipped = 0;
       for (const file of files) {
         try {
+          // Session files are append-only, so a destination copy at least as large is already up to date.
+          const existing = await this.findExistingFile(dirHandle, file.relativePath);
+          if (existing && file.size <= existing.size) {
+            skipped++;
+            this.backupMessage = `備份中... (${copied + skipped + failed.length}/${files.length})`;
+            continue;
+          }
           const blob = await firstValueFrom(this.sessionService.getBackupFile(file.relativePath));
           const fileHandle = await this.getFileHandleForPath(dirHandle, file.relativePath);
           const writable = await fileHandle.createWritable();
@@ -284,14 +294,14 @@ export class AppComponent implements OnInit, AfterViewChecked {
         } catch (fileErr: any) {
           failed.push({ path: file.relativePath, reason: fileErr?.message ?? String(fileErr) });
         }
-        this.backupMessage = `備份中... (${copied + failed.length}/${files.length})`;
+        this.backupMessage = `備份中... (${copied + skipped + failed.length}/${files.length})`;
       }
       this.backupSuccess = failed.length === 0;
       if (failed.length === 0) {
-        this.backupMessage = `備份完成！共複製 ${copied} 個檔案。`;
+        this.backupMessage = `備份完成！共複製 ${copied} 個檔案，略過 ${skipped} 個未變更檔案。`;
       } else {
         const sample = failed.slice(0, 5).map(f => f.path).join(', ');
-        this.backupMessage = `備份完成，複製 ${copied} 個檔案，${failed.length} 個失敗：${sample}${failed.length > 5 ? ' …' : ''}`;
+        this.backupMessage = `備份完成，複製 ${copied} 個檔案，略過 ${skipped} 個，${failed.length} 個失敗：${sample}${failed.length > 5 ? ' …' : ''}`;
       }
     } catch (err: any) {
       this.backupSuccess = false;
@@ -308,6 +318,21 @@ export class AppComponent implements OnInit, AfterViewChecked {
       dir = await dir.getDirectoryHandle(parts[i], { create: true });
     }
     return dir.getFileHandle(parts[parts.length - 1], { create: true });
+  }
+
+  private async findExistingFile(root: FileSystemDirectoryHandle, relativePath: string): Promise<File | null> {
+    const parts = relativePath.split('/').filter(Boolean);
+    try {
+      let dir = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        dir = await dir.getDirectoryHandle(parts[i]);
+      }
+      const handle = await dir.getFileHandle(parts[parts.length - 1]);
+      return await handle.getFile();
+    } catch (err: any) {
+      if (err?.name === 'NotFoundError' || err?.name === 'TypeMismatchError') return null;
+      throw err;
+    }
   }
 
   private scrollToBottom() {

@@ -74,24 +74,80 @@ public class SessionsController : ControllerBase
         if (!Directory.Exists(path))
             return NotFound();
 
-        var sessions = new List<ClaudeSession>();
+        var parsed = new Dictionary<string, (ClaudeSession Session, HashSet<string> Uuids)>();
         foreach (var file in Directory.GetFiles(path, "*.jsonl"))
         {
-            var session = ParseSessionMetadata(file, path);
-            if (session != null) sessions.Add(session);
+            var (session, uuids) = ParseSessionMetadata(file, path);
+            parsed[session.Id] = (session, uuids);
         }
+
+        // When a session runs out of context, Claude Code continues it in a new session file that
+        // copies much of the earlier history, and writes a "continued-in" line into the old file.
+        // Collapse each chain into its latest session so it shows up once, with the earlier
+        // segments listed (oldest first) so their messages can be merged in when viewing.
+        var continuedFrom = parsed.Values
+            .Where(p => p.Session.ContinuedInSessionId is { } next && parsed.ContainsKey(next))
+            .GroupBy(p => p.Session.ContinuedInSessionId!)
+            .ToDictionary(g => g.Key, g => g.First().Session.Id);
+
+        var sessions = new List<ClaudeSession>();
+        foreach (var (latest, latestUuids) in parsed.Values)
+        {
+            if (latest.ContinuedInSessionId is { } next && parsed.ContainsKey(next))
+                continue;
+
+            var previous = new List<string>();
+            var cursor = latest.Id;
+            while (continuedFrom.TryGetValue(cursor, out var prev) && prev != latest.Id && !previous.Contains(prev))
+            {
+                previous.Insert(0, prev);
+                cursor = prev;
+            }
+
+            if (previous.Count == 0)
+            {
+                sessions.Add(latest with { PreviousSessionIds = previous });
+                continue;
+            }
+
+            var chain = previous.Select(id => parsed[id]).Append((Session: latest, Uuids: latestUuids)).ToList();
+            var allUuids = new HashSet<string>(chain.SelectMany(c => c.Uuids));
+            sessions.Add(latest with
+            {
+                StartTime = chain.Select(c => c.Session.StartTime).FirstOrDefault(t => t != null),
+                MessageCount = allUuids.Count,
+                SubAgents = chain.SelectMany(c => c.Session.SubAgents).ToList(),
+                PreviousSessionIds = previous
+            });
+        }
+
         return sessions.OrderByDescending(s => s.StartTime ?? DateTime.MinValue).ToList();
     }
 
     [HttpGet("projects/{encodedPath}/sessions/{sessionId}")]
-    public ActionResult<List<SessionMessage>> GetSession(string encodedPath, string sessionId)
+    public ActionResult<List<SessionMessage>> GetSession(string encodedPath, string sessionId, [FromQuery] string? previous)
     {
         var path = Uri.UnescapeDataString(encodedPath);
         var file = Path.Combine(path, $"{sessionId}.jsonl");
         if (!System.IO.File.Exists(file))
             return NotFound();
 
-        return ParseSessionMessages(file);
+        // previous: comma-separated earlier segments of a continued session, oldest first.
+        // Continuations re-copy earlier messages, so de-duplicate by uuid while concatenating.
+        var segmentIds = (previous ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(IsValidSessionId)
+            .Append(sessionId);
+
+        var seen = new HashSet<string>();
+        var messages = new List<SessionMessage>();
+        foreach (var id in segmentIds)
+        {
+            var segmentFile = Path.Combine(path, $"{id}.jsonl");
+            if (!System.IO.File.Exists(segmentFile)) continue;
+            messages.AddRange(ParseSessionMessages(segmentFile).Where(m => seen.Add(m.Uuid)));
+        }
+        return messages.OrderBy(m => m.Timestamp).ToList();
     }
 
     [HttpPut("projects/{encodedPath}/sessions/{sessionId}/title")]
@@ -111,7 +167,7 @@ public class SessionsController : ControllerBase
 
         try
         {
-            RewriteTitle(file, sessionId, title);
+            AppendCustomTitle(file, sessionId, title);
         }
         catch (IOException)
         {
@@ -207,42 +263,32 @@ public class SessionsController : ControllerBase
         !string.IsNullOrEmpty(sessionId)
         && sessionId.All(c => char.IsLetterOrDigit(c) || c == '-');
 
-    private static void RewriteTitle(string filePath, string sessionId, string newTitle)
+    private static void AppendCustomTitle(string filePath, string sessionId, string newTitle)
     {
-        var lines = System.IO.File.ReadAllLines(filePath, System.Text.Encoding.UTF8);
-        var updated = new List<string>(lines.Length + 1);
-        var found = false;
-        var newTitleLine = JsonSerializer.Serialize(new { type = "ai-title", aiTitle = newTitle, sessionId });
-
-        foreach (var line in lines)
+        // Claude Code records a rename by appending a "custom-title" line, and keeps appending
+        // "ai-title" lines afterwards; custom-title takes precedence when reading (see
+        // ParseSessionMetadata). Appending the same way keeps the rename visible to Claude Code's
+        // own /resume list and avoids rewriting a file Claude Code may still be writing to.
+        var line = JsonSerializer.Serialize(new { type = "custom-title", customTitle = newTitle, sessionId });
+        var needsNewline = false;
+        using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         {
-            if (string.IsNullOrWhiteSpace(line)) { updated.Add(line); continue; }
-
-            using var doc = JsonDocument.Parse(line);
-            if (doc.RootElement.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "ai-title")
+            if (fs.Length > 0)
             {
-                found = true;
-                updated.Add(newTitleLine);
-            }
-            else
-            {
-                updated.Add(line);
+                fs.Seek(-1, SeekOrigin.End);
+                needsNewline = fs.ReadByte() != '\n';
             }
         }
-
-        if (!found)
-            updated.Add(newTitleLine);
-
-        var tempFile = filePath + ".tmp";
-        System.IO.File.WriteAllLines(tempFile, updated, new System.Text.UTF8Encoding(false));
-        System.IO.File.Delete(filePath);
-        System.IO.File.Move(tempFile, filePath);
+        System.IO.File.AppendAllText(filePath, (needsNewline ? "\n" : "") + line + "\n", new System.Text.UTF8Encoding(false));
     }
 
-    private static ClaudeSession? ParseSessionMetadata(string filePath, string projectPath)
+    private static (ClaudeSession Session, HashSet<string> Uuids) ParseSessionMetadata(string filePath, string projectPath)
     {
+        var uuids = new HashSet<string>();
         var sessionId = Path.GetFileNameWithoutExtension(filePath);
-        string? title = null;
+        string? aiTitle = null;
+        string? customTitle = null;
+        string? continuedIn = null;
         string? firstUserText = null;
         DateTime? startTime = null;
         int messageCount = 0;
@@ -259,16 +305,24 @@ public class SessionsController : ControllerBase
 
                 switch (type)
                 {
+                    // Claude Code keeps appending ai-title lines even after a rename, so a
+                    // custom-title must win regardless of line order; within each kind the last wins.
                     case "ai-title":
                         if (root.TryGetProperty("aiTitle", out var t))
-                            title = t.GetString();
+                            aiTitle = t.GetString();
                         break;
                     case "custom-title":
                         if (root.TryGetProperty("customTitle", out var ct))
-                            title = ct.GetString();
+                            customTitle = ct.GetString();
+                        break;
+                    case "continued-in":
+                        if (root.TryGetProperty("continuedInSessionId", out var ci))
+                            continuedIn = ci.GetString();
                         break;
                     case "user":
                         messageCount++;
+                        if (root.TryGetProperty("uuid", out var uu) && uu.GetString() is { } userUuid)
+                            uuids.Add(userUuid);
                         if (startTime == null && root.TryGetProperty("timestamp", out var ts))
                         {
                             if (DateTime.TryParse(ts.GetString(), out var dt))
@@ -279,12 +333,15 @@ public class SessionsController : ControllerBase
                         break;
                     case "assistant":
                         messageCount++;
+                        if (root.TryGetProperty("uuid", out var au) && au.GetString() is { } assistantUuid)
+                            uuids.Add(assistantUuid);
                         break;
                 }
             }
         }
         catch { /* skip malformed files */ }
 
+        var title = customTitle ?? aiTitle;
         if (title == null && firstUserText != null)
         {
             title = firstUserText.Length > 60
@@ -293,7 +350,7 @@ public class SessionsController : ControllerBase
         }
 
         var subAgents = ScanSubAgents(projectPath, sessionId);
-        return new ClaudeSession(sessionId, title, startTime, messageCount, subAgents);
+        return (new ClaudeSession(sessionId, title, aiTitle, startTime, messageCount, subAgents, [], continuedIn), uuids);
     }
 
     private static List<SubAgentInfo> ScanSubAgents(string projectPath, string sessionId)
@@ -320,7 +377,7 @@ public class SessionsController : ControllerBase
                 var jsonlFile = Path.Combine(subagentsDir, $"agent-{agentId}.jsonl");
                 var msgCount = CountMessages(jsonlFile);
 
-                subAgents.Add(new SubAgentInfo(agentId, agentType, description, msgCount));
+                subAgents.Add(new SubAgentInfo(sessionId, agentId, agentType, description, msgCount));
             }
             catch { /* skip malformed meta */ }
         }
