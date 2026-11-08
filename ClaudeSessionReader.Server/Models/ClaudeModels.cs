@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ClaudeSessionReader.Server.Models;
 
 public record ClaudeProject(
@@ -9,6 +11,7 @@ public record ClaudeProject(
     DateTime LastModified);
 
 public record SubAgentInfo(
+    string SessionId,
     string AgentId,
     string AgentType,
     string Description,
@@ -17,9 +20,12 @@ public record SubAgentInfo(
 public record ClaudeSession(
     string Id,
     string? Title,
+    string? AiTitle,
     DateTime? StartTime,
     int MessageCount,
-    List<SubAgentInfo> SubAgents);
+    List<SubAgentInfo> SubAgents,
+    List<string> PreviousSessionIds,
+    [property: JsonIgnore] string? ContinuedInSessionId = null);
 
 public record ContentBlock(
     string Type,

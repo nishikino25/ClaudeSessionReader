@@ -99,6 +99,7 @@
             <span class="session-date">{{ formatShortDate(session.startTime) }}</span>
             <span class="session-count">{{ session.messageCount }} msg{{ session.messageCount !== 1 ? 's' : '' }}</span>
             <span *ngIf="session.subAgents?.length" class="subagent-badge">{{ session.subAgents.length }} agent{{ session.subAgents.length !== 1 ? 's' : '' }}</span>
+            <span *ngIf="session.previousSessionIds?.length" class="continuation-badge" title="Claude Code continued this conversation across several session files; they are merged here">{{ session.previousSessionIds.length + 1 }} 段合併</span>
           </div>
         </div>
 
@@ -135,7 +136,10 @@
         <ng-template #sessionTitle>{{ selectedSession?.title || (selectedSession ? 'Conversation' : 'Select a session') }}</ng-template>
       </h2>
       <span *ngIf="selectedSubAgent" class="panel-subtitle">{{ selectedSubAgent.description }}</span>
-      <span *ngIf="!selectedSubAgent && selectedSession" class="panel-subtitle">{{ formatDate(selectedSession.startTime) }}</span>
+      <span *ngIf="!selectedSubAgent && selectedSession" class="panel-subtitle">
+        <span *ngIf="selectedSession.aiTitle && selectedSession.aiTitle !== selectedSession.title" class="original-title" [title]="selectedSession.aiTitle">原始名稱：{{ selectedSession.aiTitle }} · </span>
+        {{ formatDate(selectedSession.startTime) }}
+      </span>
 
       <div class="settings-toolbar">
         <!-- Theme toggle -->

@@ -20,9 +20,10 @@ export class SessionService {
     );
   }
 
-  getMessages(projectPath: string, sessionId: string) {
+  getMessages(projectPath: string, sessionId: string, previousSessionIds: string[] = []) {
     return this.http.get<SessionMessage[]>(
-      `/api/sessions/projects/${encodeURIComponent(projectPath)}/sessions/${sessionId}`
+      `/api/sessions/projects/${encodeURIComponent(projectPath)}/sessions/${sessionId}`,
+      { params: previousSessionIds.length ? { previous: previousSessionIds.join(',') } : {} }
     );
   }
 

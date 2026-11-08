@@ -8,6 +8,7 @@ export interface ClaudeProject {
 }
 
 export interface SubAgentInfo {
+  sessionId: string;
   agentId: string;
   agentType: string;
   description: string;
@@ -17,9 +18,12 @@ export interface SubAgentInfo {
 export interface ClaudeSession {
   id: string;
   title: string | null;
+  aiTitle: string | null;
   startTime: string | null;
   messageCount: number;
   subAgents: SubAgentInfo[];
+  /** Earlier segments (oldest first) of a session Claude Code continued into this one. */
+  previousSessionIds: string[];
 }
 
 export interface ContentBlock {
