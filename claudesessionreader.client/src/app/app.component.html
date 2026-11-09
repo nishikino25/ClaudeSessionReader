@@ -142,6 +142,7 @@
       </span>
 
       <div class="settings-toolbar">
+        <button *ngIf="selectedSession" class="btn-reveal" (click)="revealCurrentFile()" title="在檔案總管中開啟對話 log 所在資料夾">📂 開啟檔案位置</button>
         <!-- Theme toggle -->
         <button class="theme-toggle" (click)="setTheme(theme === 'dark' ? 'light' : 'dark')" [title]="theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'">
           <span class="theme-track" [class.light]="theme === 'light'">

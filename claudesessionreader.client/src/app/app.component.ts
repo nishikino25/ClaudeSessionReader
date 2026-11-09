@@ -229,6 +229,16 @@ export class AppComponent implements OnInit, AfterViewChecked {
     });
   }
 
+  revealCurrentFile() {
+    if (!this.selectedProject || !this.selectedSession) return;
+    const sessionId = this.selectedSubAgent?.sessionId ?? this.selectedSession.id;
+    this.sessionService.revealSessionFile(this.selectedProject.fullPath, sessionId, this.selectedSubAgent?.agentId).subscribe({
+      error: (err) => {
+        this.error = err.error?.error ?? 'Failed to open file location.';
+      }
+    });
+  }
+
   toggleThinking(key: string) {
     if (this.expandedThinking.has(key)) this.expandedThinking.delete(key);
     else this.expandedThinking.add(key);

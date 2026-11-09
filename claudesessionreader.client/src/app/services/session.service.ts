@@ -46,6 +46,14 @@ export class SessionService {
     );
   }
 
+  revealSessionFile(projectPath: string, sessionId: string, agentId?: string) {
+    return this.http.post<void>(
+      `/api/sessions/projects/${encodeURIComponent(projectPath)}/sessions/${sessionId}/reveal`,
+      null,
+      { params: agentId ? { agentId } : {} }
+    );
+  }
+
   listBackupFiles() {
     return this.http.get<{ relativePath: string; size: number }[]>('/api/sessions/backup/files');
   }

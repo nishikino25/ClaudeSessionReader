@@ -215,6 +215,28 @@ public class SessionsController : ControllerBase
         return ParseSessionMessages(file);
     }
 
+    [HttpPost("projects/{encodedPath}/sessions/{sessionId}/reveal")]
+    public IActionResult RevealSessionFile(string encodedPath, string sessionId, [FromQuery] string? agentId)
+    {
+        var path = Uri.UnescapeDataString(encodedPath);
+        if (!IsValidSessionId(sessionId) || (agentId != null && !IsValidSessionId(agentId)))
+            return BadRequest(new { error = "Invalid id." });
+
+        var file = agentId == null
+            ? Path.Combine(path, $"{sessionId}.jsonl")
+            : Path.Combine(path, sessionId, "subagents", $"agent-{agentId}.jsonl");
+        if (!System.IO.File.Exists(file))
+            return NotFound();
+
+        if (!OperatingSystem.IsWindows())
+            return StatusCode(501, new { error = "Opening the file location is only supported on Windows." });
+
+        // The server runs on the user's own machine, so it can open Explorer directly;
+        // /select highlights the .jsonl inside its folder.
+        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{Path.GetFullPath(file)}\"");
+        return NoContent();
+    }
+
     private List<ClaudeProject> ScanForProjects(string basePath)
     {
         if (!Directory.Exists(basePath))
